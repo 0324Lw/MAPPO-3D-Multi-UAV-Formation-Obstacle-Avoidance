@@ -1,2 +1,70 @@
-# MAPPO-3D-Multi-UAV-Formation-Obstacle-Avoidance
-基于 MAPPO (Multi-Agent Proximal Policy Optimization) 深度强化学习的多无人机三维协同编队、动态避障算法
+# 🚀 MAPPO-3D-Multi-UAV-Formation-Obstacle-Avoidance
+
+> 基于 MAPPO (Multi-Agent Proximal Policy Optimization) 深度强化学习的多无人机三维协同编队、动态避障与自主导航算法。
+> 本项目构建了一个高度自定义的 `gymnasium` 多智能体强化学习环境，支持三维连续空间下的协同起飞、高度锁定、防扎堆斥力机制以及端到端的编队保持控制。
+
+## ✨ 核心特性 (Features)
+
+* 🌍 **三维协同仿真环境**：构建了 50m x 50m x 2m 的三维连续空间。支持圆柱体与长方体障碍物的拒绝采样生成，内置 7.0m 宽度的“最小通行走廊”保障，确保环境在物理层面具有可解性。
+* 🛸 **端到端起飞与高度锁定**：通过巡航高度跟踪奖励，引导三架无人机从 $Z=0$ 自动完成垂直起飞，并分别锁定在不同的预设巡航高度（如 1.8m 与 1.2m），实现错位飞行以减少空间干涉。
+* 🤝 **协同编队保持机制**：引入了基于社会距离（Social Distance）的二次元斥力奖励模型。在鼓励编队收缩的同时，强制维持智能体间的安全物理间隔，有效解决了多机避障时的“挤压”与“追尾”难题。
+* 🧠 **MAPPO 算法架构**：采用 CTDE (Centralized Training, Decentralized Execution) 框架。Actor 仅依赖局部观测（34维），Critic 观察全局状态（102维）。集成了正交初始化、GAE 优势估计、优势函数归一化及线性学习率调度。
+* 📡 **高密度激光雷达感知**：每架无人机配备 21 线局部激光雷达，覆盖前方 180° 视场。针对障碍物边缘进行了“物理膨胀”处理，提升了对正方体尖角等几何死角的感知精度。
+
+## 🧠 强化学习环境设计 (Environment Design)
+
+项目通过端到端的奖励引导，实现了无人机从地面起飞到编队导航的全过程自动化。
+
+### 1. 状态空间 (Observation Space)
+
+每个智能体的局部观测为 **34 维连续特征向量**，经过严格归一化处理：
+
+| 维度索引 | 物理含义 (Description) | 说明 |
+| :---: | :--- | :--- |
+| `0:3` | **归一化自身坐标** | 映射至 [0, 50] 与 [0, 2] 边界。 |
+| `3:5` | **自身线速度与偏航角** | 当前运动状态。 |
+| `5:11` | **智能体共享信息** | 与其余两架无人机的相对三维位置向量。 |
+| `11:13` | **相对目标向量** | 编队重心相对于终点的距离与方位角偏差。 |
+| `13:34` | **21 线 LiDAR 数据** | 180° 局部避障感知，返回归一化探测距离。 |
+
+### 2. 动作空间 (Action Space)
+
+采用 **3 维连续动作空间**，控制无人机的三维运动：
+
+* **$a_0$ (线速度控制)**：映射至 $[0, V_{max}]$。
+* **$a_1$ (偏航角速度控制)**：映射至 $[-\omega_{max}, \omega_{max}]$。
+* **$a_2$ (垂直速度控制)**：映射至 $[-V_{z\_max}, V_{z\_max}]$，负责起降与高度维持。
+
+### 3. 奖励函数设计 (Reward Function)
+
+采用端到端的连续奖励设计，通过多维约束引导协同行为：
+
+$$R = r_{step} + r_{alt} + r_{rep} + r_{form} + r_{prog} + r_{smooth} + r_{term}$$
+
+* 🟢 **高度锁定 ($r_{alt}$)**：惩罚当前高度与目标巡航高度的偏差，引导垂直起飞与平稳巡航。
+* 🟢 **防扎堆斥力 ($r_{rep}$)**：当两机距离小于 2m 安全阈值时施加二次方惩罚，强制拉开间距。
+* 🟢 **弹性编队奖励 ($r_{form}$)**：允许在避障时适度拉开距离（阈值内无惩罚），超过 6m 阈值后施加线性惩罚。
+* 🟢 **重心推进奖励 ($r_{prog}$)**：基于编队重心与终点距离的变化量给予奖励。
+* 🔴 **动作平滑惩罚 ($r_{smooth}$)**：惩罚相邻步动作的改变量，消除 Bang-Bang Control 导致的电机震态。
+* 🔴 **单步截断机制**：单步总 Reward 严格限幅在 **[-2.0, 2.0]**，确保训练初期梯度的平稳性。
+
+## 🛠️ 环境依赖 (Requirements)
+
+推荐环境：Python 3.10 + PyTorch 2.0+
+
+核心库需求：
+* `gymnasium` 
+* `torch` 
+* `numpy` 
+* `pandas` 
+* `matplotlib` 
+* `imageio` 
+
+**快速开始：**
+```bash
+# 安装依赖
+pip install gymnasium torch numpy pandas matplotlib imageio
+```
+
+![joint_view_ep4_SUCCESS](https://github.com/user-attachments/assets/fe414095-d890-4124-83a7-5e58e181334b)
+![joint_view_ep8_SUCCESS](https://github.com/user-attachments/assets/b55a6cf4-96a5-41ca-acd2-fd1c2a793ea0)
